@@ -1,0 +1,63 @@
+
+# core:1.0.0 builder | 4/24/2023 by m.molaie
+FROM ubuntu:20.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    DEBCONF_NONINTERACTIVE_SEEN=true \
+    URL=asa-group.net
+
+RUN apt update && \
+    apt install -y wget \
+    pulseaudio \
+    socat \
+    nodejs \
+    npm \
+    unzip \
+    wget \
+    abiword \
+    gnupg \
+    ffmpeg \
+    apt-transport-https \
+    wget \
+    software-properties-common \
+    ratpoison \
+    websockify \
+    libxv1 \
+    libglu1-mesa \
+    xauth
+
+WORKDIR /tmp
+
+RUN wget https://github.com/kasmtech/KasmVNC/releases/download/v1.0.1/kasmvncserver_bionic_1.0.1_amd64.deb && \
+    apt install -y ./kasmvncserver_bionic_1.0.1_amd64.deb && \
+    rm -fr kasmvncserver_bionic_1.0.1_amd64.deb
+
+RUN mkdir ~/.vnc/ && \
+        mkdir ~/.dosbox
+
+WORKDIR /opt
+
+COPY google-chrome-stable_current_amd64.deb /tmp
+RUN apt install -y /tmp/google-chrome-stable_current_amd64.deb
+
+RUN echo "exec google-chrome --new-window $URL --no-sandbox" > ~/.ratpoisonrc
+
+RUN apt autoremove -y && \
+    apt remove --purge -y wget git
+
+WORKDIR /usr/share/kasmvnc/
+RUN rm -fr www && \
+        mkdir www
+COPY www.zip www/
+WORKDIR /usr/share/kasmvnc/www
+RUN unzip www.zip
+
+WORKDIR /opt/jsmpeg-master
+
+RUN echo "#!/bin/bash" >> run.sh && \
+    echo "node websocket-relay @CfPass 8081 8082 & " >> run.sh && \
+    echo "sleep 2" >> run.sh && \
+    echo "ffmpeg -v verbose -f pulse -ar 44100 -i default -f mpegts -correct_ts_overflow 0 -codec:a mp2 -b:a 128k -ac 1 -muxdelay 0.001 http://127.0.0.1:8081/@CfPass > /dev/null 2>&1 &" >> run.sh && \
+    chmod 777 run.sh
+
+CMD yes "test" | vncpasswd -u proot -w -r  && pulseaudio -D --exit-idle-time=-1 && pacmd load-module module-virtual-sink sink_name=v1 && pacmd set-default-sink v1 && pacmd set-default-source v1.monitor  && yes "1" | vncserver && vncserver -kill :1 && vncserver -disableBasicAuth && ./run.sh && tail -f /dev/null
